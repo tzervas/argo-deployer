@@ -65,16 +65,29 @@ This will:
 
 Once deployment completes:
 
-1. Open your browser to: http://192.168.1.180:8080
+1. **Find your VM's IP address:**
+   ```bash
+   # The VM uses DHCP - check the deployment output for the IP, or run:
+   ssh homelab "sudo virsh domifaddr argocd-server"
+   
+   # Or scan your network for the VM (example if DHCP range is 192.168.1.100-200):
+   nmap -sn 192.168.1.0/24 | grep -B 2 "52:54:00"
+   ```
 
-2. Login with:
+2. Open your browser to: **http://<VM_IP>:30080** (replace <VM_IP> with the DHCP address from step 1)
+   
+   Example: http://192.168.1.100:30080
+
+3. Login with:
    - **Username:** admin
    - **Password:** changemedummy123
 
-3. **IMPORTANT:** Change your password!
+4. **IMPORTANT:** Change your password!
    - Click "User Info" in the top right
    - Click "Update Password"
    - Enter a new secure password
+
+**Note:** Consider setting a DHCP reservation on your router for the VM's MAC address to keep a consistent IP.
 
 ## Step 5: Add Your Applications
 

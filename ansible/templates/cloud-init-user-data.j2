@@ -13,7 +13,9 @@ users:
     shell: /bin/bash
     lock_passwd: false
     ssh_authorized_keys:
-      - {{ lookup('file', lookup('env', 'HOME') + '/.ssh/id_rsa.pub') }}
+{% for key_file in query('fileglob', lookup('env', 'HOME') + '/.ssh/*.pub') %}
+      - {{ lookup('file', key_file) }}
+{% endfor %}
 
 # Package updates and upgrades
 package_update: true
@@ -68,7 +70,7 @@ runcmd:
   - kubectl wait --for=condition=Ready pods --all -n argocd --timeout=600s
 
   # Patch ArgoCD server for insecure mode (no TLS) and expose on host network
-  - kubectl patch svc argocd-server -n argocd -p '{"spec":{"type":"NodePort","ports":[{"port":80,"targetPort":8080,"nodePort":{{ argocd_webui_port }},"protocol":"TCP","name":"http"}]}}'
+  - kubectl patch svc argocd-server -n argocd -p '{"spec":{"type":"NodePort","ports":[{"port":80,"targetPort":8080,"nodePort":30080,"protocol":"TCP","name":"http"}]}}'
   - kubectl patch deployment argocd-server -n argocd -p '[{"op":"add","path":"/spec/template/spec/containers/0/command/-","value":"--insecure"}]' --type json
 
   # Install ArgoCD CLI

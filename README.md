@@ -55,10 +55,21 @@ This will:
 
 ### 4. Access ArgoCD
 
-Once deployed, access the ArgoCD WebUI at:
+Once deployed, the VM will obtain an IP via DHCP on your network. To find the VM's IP:
+
+```bash
+# From the homelab server
+ssh homelab "sudo virsh domifaddr argocd-server"
+
+# Or check the deployment log which will show the IP
 ```
-http://192.168.1.170:8080
+
+Access the ArgoCD WebUI at (replace IP with your VM's DHCP address):
 ```
+http://<VM_IP>:30080
+```
+
+**Note**: The VM uses DHCP, so the IP may vary. Consider setting a DHCP reservation for the MAC address shown in virsh output.
 
 **Default Credentials:**
 - Username: `admin`
