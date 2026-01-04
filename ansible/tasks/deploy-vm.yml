@@ -19,6 +19,12 @@
       when: vm_name in existing_vms.stdout_lines
   when: vm_name in existing_vms.stdout_lines
 
+- name: Remove existing VM disk if present
+  file:
+    path: "{{ vm_storage_path }}/{{ vm_image_name }}"
+    state: absent
+  when: vm_name in existing_vms.stdout_lines
+
 - name: Create VM disk from base image
   command: >
     qemu-img create -f qcow2 
@@ -26,8 +32,6 @@
     -b /var/cache/argocd-deployer/ubuntu-22.04-server-cloudimg-amd64.img
     {{ vm_storage_path }}/{{ vm_image_name }}
     {{ vm_disk_size }}G
-  args:
-    creates: "{{ vm_storage_path }}/{{ vm_image_name }}"
 
 - name: Resize VM disk
   command: >
@@ -46,11 +50,12 @@
 
 - name: Generate bcrypt hash for ArgoCD admin password
   shell: |
-    python3 -c "import bcrypt; print(bcrypt.hashpw('{{ argocd_admin_password }}'.encode(), bcrypt.gensalt()).decode())"
+    python3 -c "import bcrypt; print(bcrypt.hashpw('{{ argocd_admin_password }}'.encode(), bcrypt.gensalt(rounds=10)).decode())"
   register: bcrypt_password
   delegate_to: localhost
   become: false
   changed_when: false
+  run_once: true
 
 - name: Create cloud-init user-data
   template:
@@ -63,17 +68,17 @@
     content: |
       version: 2
       ethernets:
-        enp1s0:
-          dhcp4: false
-          addresses:
-            - {{ argocd_ip }}/24
-          gateway4: 192.168.1.1
-          nameservers:
-            addresses:
-              - 8.8.8.8
-              - 8.8.4.4
+        all:
+          match:
+            name: e*
+          dhcp4: true
     dest: /tmp/network-config
     mode: '0644'
+
+- name: Remove old cloud-init ISO if present
+  file:
+    path: "{{ vm_storage_path }}/{{ vm_name }}-cloud-init.iso"
+    state: absent
 
 - name: Create cloud-init ISO
   command: >
@@ -85,8 +90,6 @@
     /tmp/user-data
     /tmp/meta-data
     /tmp/network-config
-  args:
-    creates: "{{ vm_storage_path }}/{{ vm_name }}-cloud-init.iso"
 
 - name: Define and start ArgoCD VM
   command: >
@@ -102,6 +105,7 @@
     --network bridge={{ vm_network_bridge }},model=virtio
     --import
     --noautoconsole
+    --wait=0
   changed_when: true
 
 - name: Wait for VM to be running
@@ -112,11 +116,36 @@
   delay: 10
   changed_when: false
 
+- name: Wait for VM to get IP address from DHCP
+  shell: |
+    virsh domifaddr {{ vm_name }} --source agent 2>/dev/null || virsh domifaddr {{ vm_name }} --source lease 2>/dev/null || virsh domifaddr {{ vm_name }} 2>/dev/null
+  register: vm_ip_check
+  until: vm_ip_check.stdout | regex_search('([0-9]{1,3}\.){3}[0-9]{1,3}')
+  retries: 60
+  delay: 5
+  changed_when: false
+
+- name: Extract VM IP address
+  set_fact:
+    detected_vm_ip: "{{ vm_ip_check.stdout | regex_search('([0-9]{1,3}\.){3}[0-9]{1,3}') }}"
+
+- name: Display detected IP address
+  debug:
+    msg: "VM IP Address detected: {{ detected_vm_ip }}"
+
+- name: Save VM IP to local file
+  delegate_to: localhost
+  copy:
+    content: "{{ detected_vm_ip }}"
+    dest: "{{ playbook_dir }}/../.vm_ip"
+    mode: '0644'
+  become: false
+
 - name: Wait for ArgoCD VM to be accessible via SSH
   wait_for:
-    host: "{{ argocd_ip }}"
+    host: "{{ detected_vm_ip }}"
     port: 22
-    delay: 30
+    delay: 10
     timeout: 600
     state: started
 
@@ -129,6 +158,12 @@
     msg: 
       - "ArgoCD VM deployed successfully!"
       - "VM Name: {{ vm_name }}"
-      - "IP Address: {{ argocd_ip }}"
+      - "IP Address: {{ detected_vm_ip }}"
       - "Memory: {{ vm_memory }}MB"
       - "CPUs: {{ vm_cpus }}"
+      - ""
+      - "Access ArgoCD WebUI at: http://{{ detected_vm_ip }}:30080"
+      - "Username: admin"
+      - "Password: {{ argocd_admin_password }}"
+      - ""
+      - "VM IP saved to: {{ playbook_dir }}/../.vm_ip"

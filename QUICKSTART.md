@@ -63,18 +63,31 @@ This will:
 
 ## Step 4: Access ArgoCD
 
-Once deployment completes:
+Once deployment completes, the VM's IP address is automatically detected and saved.
 
-1. Open your browser to: http://192.168.1.180:8080
+1. **Get your VM's IP address:**
+   ```bash
+   # Use the helper script (recommended)
+   ./scripts/get-vm-ip.sh
+   
+   # Or read the saved IP file
+   cat .vm_ip
+   ```
 
-2. Login with:
+2. Open your browser to: **http://<VM_IP>:30080**
+   
+   Example: http://192.168.1.100:30080
+
+3. Login with:
    - **Username:** admin
    - **Password:** changemedummy123
 
-3. **IMPORTANT:** Change your password!
+4. **IMPORTANT:** Change your password!
    - Click "User Info" in the top right
    - Click "Update Password"
    - Enter a new secure password
+
+**Note:** Consider setting a DHCP reservation on your router for the VM's MAC address to keep a consistent IP.
 
 ## Step 5: Add Your Applications
 

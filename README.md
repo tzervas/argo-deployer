@@ -55,10 +55,29 @@ This will:
 
 ### 4. Access ArgoCD
 
-Once deployed, access the ArgoCD WebUI at:
+The deployment automatically detects and saves the VM's DHCP-assigned IP address. After deployment completes, the IP will be displayed in the output and saved to `.vm_ip` file.
+
+**To get the VM IP:**
+
+```bash
+# Quick lookup (uses saved IP and verifies connectivity)
+./scripts/get-vm-ip.sh
+
+# Or check the saved file
+cat .vm_ip
 ```
-http://192.168.1.170:8080
+
+Access the ArgoCD WebUI at:
 ```
+http://<VM_IP>:30080
+```
+
+**Why DHCP?** Dynamic IP detection is more resilient than static IP configuration, which can fail due to:
+- Different network interface naming (enp1s0 vs ens3 vs eth0)
+- Network configuration variations across systems
+- Bridge setup differences
+
+The deployment automatically queries the VM's actual IP and saves it for easy access.
 
 **Default Credentials:**
 - Username: `admin`

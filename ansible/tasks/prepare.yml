@@ -63,7 +63,7 @@
     url: https://cloud-images.ubuntu.com/releases/22.04/release/ubuntu-22.04-server-cloudimg-amd64.img
     dest: /var/cache/argocd-deployer/ubuntu-22.04-server-cloudimg-amd64.img
     mode: '0644'
-    checksum: sha256:https://cloud-images.ubuntu.com/releases/22.04/release/SHA256SUMS
+    timeout: 300
   when: not base_image.stat.exists
   register: download_result
   retries: 3

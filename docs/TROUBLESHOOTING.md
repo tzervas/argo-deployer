@@ -350,6 +350,55 @@ ssh ubuntu@192.168.1.180 "argocd app get <app-name> --insecure"
 
 ## Common Error Messages
 
+### "network bridge not found" or "virbr0 does not exist"
+
+**Symptom:** VM deployment fails with network bridge error
+
+**Cause:** The default libvirt bridge (virbr0) doesn't exist on the host, and a custom bridge (like br0) is used instead
+
+**Fix:**
+1. Check available bridges:
+   ```bash
+   ssh homelab "ip link show type bridge"
+   ```
+
+2. Update `inventory/hosts.yml` to use the correct bridge:
+   ```yaml
+   vm_network_bridge: br0  # or whatever bridge name you found
+   ```
+
+### "provided port is not in the valid range" (NodePort error)
+
+**Symptom:** Cloud-init log shows NodePort error with port 8080
+
+**Cause:** Kubernetes NodePort range is 30000-32767, not lower ports
+
+**Fix:** The deployment now uses port 30080 (already fixed in cloud-init template)
+
+Access ArgoCD at: `http://<VM_IP>:30080`
+
+### VM gets DHCP instead of static IP
+
+**Symptom:** VM doesn't get the configured static IP (192.168.1.180)
+
+**Cause:** Network interface naming varies (enp1s0, ens3, etc.) and static config may not apply
+
+**Current Solution:** The deployment uses DHCP for reliability. The VM will get an IP from your router's DHCP pool.
+
+**To find VM IP:**
+```bash
+# Method 1: Check virsh
+ssh homelab "sudo virsh domifaddr argocd-server"
+
+# Method 2: Check deployment logs
+tail logs/deploy*.log | grep "VM IP"
+
+# Method 3: Scan network for VM MAC (52:54:00:xx:xx:xx)
+nmap -sn 192.168.1.0/24
+```
+
+**Recommendation:** Set a DHCP reservation on your router for the VM's MAC address to maintain a consistent IP.
+
 ### "connection refused"
 
 - ArgoCD server not running
