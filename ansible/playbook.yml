@@ -1,0 +1,43 @@
+---
+- name: Deploy ArgoCD VM on Homelab Server
+  hosts: argocd_hosts
+  become: true
+  gather_facts: true
+  
+  vars_files:
+    - ../config/argocd-config.yml
+    - ../config/applications.yml
+  
+  tasks:
+    - name: Include preparation tasks
+      include_tasks: tasks/prepare.yml
+      tags: [prepare, never]
+    
+    - name: Include VM deployment tasks
+      include_tasks: tasks/deploy-vm.yml
+      tags: [deploy, never]
+    
+    - name: Include ArgoCD configuration tasks
+      include_tasks: tasks/configure-argocd.yml
+      tags: [configure, never]
+    
+    - name: Include application bootstrap tasks
+      include_tasks: tasks/bootstrap-apps.yml
+      tags: [bootstrap, never]
+    
+    - name: Include backup tasks
+      include_tasks: tasks/backup.yml
+      tags: [backup, never]
+    
+    - name: Include restore tasks
+      include_tasks: tasks/restore.yml
+      tags: [restore, never]
+    
+    # Default: run all main tasks
+    - name: Run full deployment
+      block:
+        - include_tasks: tasks/prepare.yml
+        - include_tasks: tasks/deploy-vm.yml
+        - include_tasks: tasks/configure-argocd.yml
+        - include_tasks: tasks/bootstrap-apps.yml
+      tags: [always]

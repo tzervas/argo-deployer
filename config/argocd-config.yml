@@ -1,0 +1,162 @@
+---
+# ArgoCD Configuration Settings
+
+# Admin user configuration
+admin:
+  username: admin
+  # Password will be bcrypt hashed during deployment
+  password: "changemedummy123"
+  # Set to true to disable admin user after creating other users
+  disable_after_setup: false
+
+# Server configuration
+server:
+  # Base URL for ArgoCD (will be accessible from LAN)
+  base_url: "http://192.168.1.180:8080"
+  
+  # Enable insecure mode (no TLS) - change for production
+  insecure: true
+  
+  # Session timeout (in seconds)
+  session_duration: 86400  # 24 hours
+  
+  # Enable anonymous access (read-only)
+  anonymous_enabled: false
+
+# Repository settings
+repositories:
+  # Default repository timeout (seconds)
+  timeout: 60
+  
+  # Default connection settings
+  connection_retry: 3
+  
+  # Enable repository cache
+  cache_enabled: true
+
+# Application settings
+applications:
+  # Default sync policy for new applications
+  default_sync_policy:
+    automated:
+      prune: false
+      self_heal: false
+    
+    sync_options:
+      - CreateNamespace=true
+  
+  # Resource tracking method
+  tracking_method: annotation  # or 'label'
+  
+  # Diff customization
+  diff_options:
+    ignore_aggregated_roles: false
+
+# Notifications (optional)
+notifications:
+  enabled: false
+  # Configure notification services here if enabled
+  # services:
+  #   - name: slack
+  #     webhook_url: "{{ lookup('env', 'SLACK_WEBHOOK_URL') }}"
+
+# RBAC Configuration
+rbac:
+  # Default policy
+  policy_default: role:readonly
+  
+  # Additional policies
+  policies: |
+    p, role:admin, applications, *, */*, allow
+    p, role:admin, clusters, *, *, allow
+    p, role:admin, repositories, *, *, allow
+    p, role:admin, projects, *, *, allow
+    g, admin, role:admin
+
+# Resource customizations
+resource_customizations:
+  health_check_script: |
+    hs = {}
+    if obj.status ~= nil then
+      if obj.status.conditions ~= nil then
+        for i, condition in ipairs(obj.status.conditions) do
+          if condition.type == "Ready" and condition.status == "False" then
+            hs.status = "Degraded"
+            hs.message = condition.message
+            return hs
+          end
+          if condition.type == "Ready" and condition.status == "True" then
+            hs.status = "Healthy"
+            hs.message = condition.message
+            return hs
+          end
+        end
+      end
+    end
+    hs.status = "Progressing"
+    hs.message = "Waiting for status"
+    return hs
+
+# Dex configuration (SSO/OIDC) - disabled by default
+dex:
+  enabled: false
+  # Configure SSO here if needed
+
+# Git configuration
+git:
+  # Skip TLS verification for git repos (not recommended for production)
+  skip_tls_verify: false
+  
+  # Default git timeout (seconds)
+  timeout: 15
+
+# Helm settings
+helm:
+  # Values file schemes to allow
+  value_file_schemes:
+    - http
+    - https
+  
+  # Skip CRDs installation
+  skip_crds: false
+
+# Kustomize settings
+kustomize:
+  # Build options
+  build_options: "--enable-helm"
+  
+  # Kustomize version
+  version: "v5.0.0"
+
+# Resource exclusions (resources to ignore in sync)
+resource_exclusions: |
+  - apiGroups:
+    - cilium.io
+    kinds:
+    - CiliumIdentity
+    clusters:
+    - "*"
+
+# Resource inclusions (force include specific resources)
+resource_inclusions: ""
+
+# Cluster settings
+cluster:
+  # In-cluster configuration
+  in_cluster: true
+  
+  # Cluster name
+  name: in-cluster
+  
+  # Namespaces to watch (empty = all)
+  namespaces: []
+
+# Metrics and monitoring
+metrics:
+  enabled: true
+  port: 8082
+
+# Logging
+logging:
+  level: info  # debug, info, warn, error
+  format: text  # text or json

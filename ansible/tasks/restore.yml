@@ -1,0 +1,42 @@
+---
+# Restore ArgoCD from backup
+
+- name: Check for backup files
+  find:
+    paths: /var/backups/argocd
+    patterns: "argocd-backup-*.yaml"
+  register: backup_files
+
+- name: Fail if no backups found
+  fail:
+    msg: "No backup files found in /var/backups/argocd"
+  when: backup_files.matched == 0
+
+- name: Get latest backup file
+  set_fact:
+    latest_backup: "{{ backup_files.files | sort(attribute='mtime', reverse=true) | first }}"
+
+- name: Add ArgoCD VM to dynamic inventory for restore
+  add_host:
+    name: argocd-vm
+    ansible_host: "{{ argocd_ip }}"
+    ansible_user: ubuntu
+    ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+    ansible_python_interpreter: /usr/bin/python3
+
+- name: Copy backup to VM
+  copy:
+    src: "{{ latest_backup.path }}"
+    dest: /tmp/argocd-restore.yaml
+    mode: '0644'
+  delegate_to: argocd-vm
+
+- name: Restore ArgoCD namespace
+  delegate_to: argocd-vm
+  shell: |
+    kubectl apply -n argocd -f /tmp/argocd-restore.yaml
+  changed_when: true
+
+- name: Display restore complete message
+  debug:
+    msg: "ArgoCD restored from {{ latest_backup.path }}"

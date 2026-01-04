@@ -1,0 +1,75 @@
+---
+# Prepare host system and download ArgoCD VM image
+
+- name: Check if running on correct architecture
+  assert:
+    that:
+      - ansible_architecture == "x86_64"
+    fail_msg: "This playbook requires x86_64 architecture"
+
+- name: Ensure required packages are installed
+  package:
+    name:
+      - qemu-kvm
+      - libvirt-daemon-system
+      - libvirt-clients
+      - bridge-utils
+      - virtinst
+      - python3-libvirt
+      - python3-lxml
+      - cloud-utils
+      - genisoimage
+    state: present
+  when: ansible_os_family == "Debian"
+
+- name: Ensure required packages are installed (RedHat family)
+  package:
+    name:
+      - qemu-kvm
+      - libvirt
+      - virt-install
+      - python3-libvirt
+      - python3-lxml
+      - cloud-utils
+      - genisoimage
+    state: present
+  when: ansible_os_family == "RedHat"
+
+- name: Ensure libvirt is running
+  service:
+    name: libvirtd
+    state: started
+    enabled: yes
+
+- name: Create VM storage directory
+  file:
+    path: "{{ vm_storage_path }}"
+    state: directory
+    mode: '0755'
+
+- name: Create cache directory for downloads
+  file:
+    path: /var/cache/argocd-deployer
+    state: directory
+    mode: '0755'
+
+- name: Check if base Ubuntu cloud image exists
+  stat:
+    path: /var/cache/argocd-deployer/ubuntu-22.04-server-cloudimg-amd64.img
+  register: base_image
+
+- name: Download Ubuntu cloud image
+  get_url:
+    url: https://cloud-images.ubuntu.com/releases/22.04/release/ubuntu-22.04-server-cloudimg-amd64.img
+    dest: /var/cache/argocd-deployer/ubuntu-22.04-server-cloudimg-amd64.img
+    mode: '0644'
+    checksum: sha256:https://cloud-images.ubuntu.com/releases/22.04/release/SHA256SUMS
+  when: not base_image.stat.exists
+  register: download_result
+  retries: 3
+  delay: 10
+  until: download_result is succeeded
+
+- name: Display preparation complete message
+  debug:
+    msg: "Host preparation complete. Base image ready for VM creation."

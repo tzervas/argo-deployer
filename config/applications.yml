@@ -1,0 +1,115 @@
+---
+# ArgoCD Application Definitions
+# Define your Helm charts and Kubernetes manifests here
+# These will be automatically bootstrapped in ArgoCD
+
+applications:
+  # Example Helm Chart Application
+  - name: nginx-ingress
+    enabled: true
+    type: helm
+    description: "NGINX Ingress Controller"
+    namespace: ingress-nginx
+    create_namespace: true
+    repo_url: https://kubernetes.github.io/ingress-nginx
+    chart: ingress-nginx
+    target_revision: "4.8.3"
+    sync_policy:
+      automated:
+        prune: true
+        self_heal: true
+    values: |
+      controller:
+        service:
+          type: LoadBalancer
+
+  # Example: Kubernetes Manifest from Git
+  - name: example-app
+    enabled: false
+    type: git
+    description: "Example application from Git repository"
+    namespace: default
+    create_namespace: false
+    repo_url: https://github.com/argoproj/argocd-example-apps
+    path: guestbook
+    target_revision: HEAD
+    sync_policy:
+      automated:
+        prune: true
+        self_heal: true
+
+  # Example: Kustomize Application
+  - name: kustomize-app
+    enabled: false
+    type: kustomize
+    description: "Example Kustomize application"
+    namespace: default
+    create_namespace: false
+    repo_url: https://github.com/argoproj/argocd-example-apps
+    path: kustomize-guestbook
+    target_revision: HEAD
+    sync_policy:
+      automated:
+        prune: false
+        self_heal: false
+
+  # Add your applications below:
+  # 
+  # - name: my-application
+  #   enabled: true
+  #   type: helm  # or 'git' or 'kustomize'
+  #   description: "My custom application"
+  #   namespace: my-namespace
+  #   create_namespace: true
+  #   repo_url: https://charts.my-repo.com
+  #   chart: my-chart  # for Helm charts
+  #   # path: my-path  # for Git/Kustomize
+  #   target_revision: "1.0.0"
+  #   sync_policy:
+  #     automated:
+  #       prune: true
+  #       self_heal: true
+  #   values: |
+  #     # Helm values here
+  #     key: value
+
+# Repository Credentials (if needed for private repos)
+repositories:
+  # Example private repository
+  # - url: https://github.com/myorg/private-repo
+  #   username: myuser
+  #   password: "{{ lookup('env', 'GITHUB_TOKEN') }}"
+  #   type: git
+
+  # Example private Helm repository
+  # - url: https://charts.private.com
+  #   username: myuser
+  #   password: "{{ lookup('env', 'HELM_REPO_PASSWORD') }}"
+  #   type: helm
+
+# ArgoCD Projects (optional - for organizing applications)
+projects:
+  - name: default
+    description: "Default project for all applications"
+    source_repos:
+      - '*'
+    destinations:
+      - namespace: '*'
+        server: https://kubernetes.default.svc
+    cluster_resource_whitelist:
+      - group: '*'
+        kind: '*'
+
+  # Example custom project
+  # - name: production
+  #   description: "Production applications"
+  #   source_repos:
+  #     - https://github.com/myorg/*
+  #   destinations:
+  #     - namespace: 'prod-*'
+  #       server: https://kubernetes.default.svc
+  #   cluster_resource_whitelist:
+  #     - group: 'apps'
+  #       kind: 'Deployment'
+  #     - group: ''
+  #       kind: 'Service'

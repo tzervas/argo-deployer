@@ -1,0 +1,33 @@
+---
+# Backup ArgoCD configuration
+
+- name: Create backup directory
+  file:
+    path: /var/backups/argocd
+    state: directory
+    mode: '0755'
+
+- name: Add ArgoCD VM to dynamic inventory for backup
+  add_host:
+    name: argocd-vm
+    ansible_host: "{{ argocd_ip }}"
+    ansible_user: ubuntu
+    ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+    ansible_python_interpreter: /usr/bin/python3
+
+- name: Backup ArgoCD namespace
+  delegate_to: argocd-vm
+  shell: |
+    kubectl get all,cm,secret -n argocd -o yaml > /tmp/argocd-backup-{{ ansible_date_time.iso8601_basic_short }}.yaml
+  changed_when: true
+
+- name: Fetch backup from VM
+  fetch:
+    src: "/tmp/argocd-backup-{{ ansible_date_time.iso8601_basic_short }}.yaml"
+    dest: "/var/backups/argocd/argocd-backup-{{ ansible_date_time.iso8601_basic_short }}.yaml"
+    flat: yes
+  delegate_to: argocd-vm
+
+- name: Display backup location
+  debug:
+    msg: "Backup saved to /var/backups/argocd/argocd-backup-{{ ansible_date_time.iso8601_basic_short }}.yaml"

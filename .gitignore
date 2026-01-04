@@ -1,0 +1,62 @@
+# Logs
+logs/
+*.log
+
+# Ansible
+*.retry
+.ansible/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+
+# Secrets - DO NOT COMMIT
+secrets/
+*.key
+*.pem
+*_rsa
+*_rsa.pub
+.env
+*.secret
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+.directory
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Cache
+cache/
+.cache/
+
+# Local configuration overrides
+local.yml
+*-local.yml
+inventory/*-local.yml
+
+# Downloaded images
+*.qcow2
+*.iso
+*.img

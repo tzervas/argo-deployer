@@ -1,0 +1,132 @@
+---
+# Bootstrap applications in ArgoCD
+
+- name: Login to ArgoCD
+  delegate_to: argocd-vm
+  shell: |
+    argocd login {{ argocd_ip }}:{{ argocd_webui_port }} \
+      --username admin \
+      --password '{{ argocd_admin_password }}' \
+      --insecure
+  changed_when: false
+
+- name: Add repositories to ArgoCD
+  delegate_to: argocd-vm
+  shell: |
+    argocd repo add {{ item.url }} \
+      {% if item.username is defined %}--username {{ item.username }}{% endif %} \
+      {% if item.password is defined %}--password '{{ item.password }}'{% endif %} \
+      {% if item.type is defined %}--type {{ item.type }}{% endif %} \
+      --insecure \
+      --upsert
+  loop: "{{ repositories }}"
+  when: repositories is defined and repositories | length > 0
+  register: repo_add
+  changed_when: "'repository added' in repo_add.stdout or 'repository updated' in repo_add.stdout"
+  failed_when: repo_add.rc != 0 and 'already exists' not in repo_add.stderr
+
+- name: Create ArgoCD projects
+  delegate_to: argocd-vm
+  shell: |
+    argocd proj create {{ item.name }} \
+      --description "{{ item.description }}" \
+      {% for repo in item.source_repos %}--src {{ repo }} {% endfor %} \
+      {% for dest in item.destinations %}--dest {{ dest.server }},{{ dest.namespace }} {% endfor %} \
+      --insecure \
+      --upsert
+  loop: "{{ projects }}"
+  when: projects is defined and projects | length > 0
+  register: proj_create
+  changed_when: "'project created' in proj_create.stdout or 'project updated' in proj_create.stdout"
+  failed_when: proj_create.rc != 0 and 'already exists' not in proj_create.stderr
+
+- name: Create temporary values files for Helm applications
+  delegate_to: argocd-vm
+  copy:
+    content: "{{ item.values }}"
+    dest: "/tmp/values-{{ item.name }}.yaml"
+    mode: '0644'
+  loop: "{{ applications }}"
+  when: 
+    - item.enabled | default(true)
+    - item.type == 'helm'
+    - item.values is defined
+  no_log: false
+
+- name: Create Helm chart applications in ArgoCD
+  delegate_to: argocd-vm
+  shell: |
+    argocd app create {{ item.name }} \
+      --repo {{ item.repo_url }} \
+      --helm-chart {{ item.chart }} \
+      --revision {{ item.target_revision }} \
+      --dest-server https://kubernetes.default.svc \
+      --dest-namespace {{ item.namespace }} \
+      {% if item.values is defined %}--values /tmp/values-{{ item.name }}.yaml{% endif %} \
+      {% if item.sync_policy.automated is defined %}--sync-policy automated{% endif %} \
+      {% if item.sync_policy.automated.prune | default(false) %}--auto-prune{% endif %} \
+      {% if item.sync_policy.automated.self_heal | default(false) %}--self-heal{% endif %} \
+      --insecure \
+      --upsert
+  loop: "{{ applications }}"
+  when:
+    - item.enabled | default(true)
+    - item.type == 'helm'
+  register: helm_app_create
+  changed_when: "'application created' in helm_app_create.stdout or 'application updated' in helm_app_create.stdout"
+  failed_when: helm_app_create.rc != 0 and 'already exists' not in helm_app_create.stderr
+
+- name: Create Git/Kustomize applications in ArgoCD
+  delegate_to: argocd-vm
+  shell: |
+    argocd app create {{ item.name }} \
+      --repo {{ item.repo_url }} \
+      --path {{ item.path }} \
+      --revision {{ item.target_revision }} \
+      --dest-server https://kubernetes.default.svc \
+      --dest-namespace {{ item.namespace }} \
+      {% if item.sync_policy.automated is defined %}--sync-policy automated{% endif %} \
+      {% if item.sync_policy.automated.prune | default(false) %}--auto-prune{% endif %} \
+      {% if item.sync_policy.automated.self_heal | default(false) %}--self-heal{% endif %} \
+      --insecure \
+      --upsert
+  loop: "{{ applications }}"
+  when:
+    - item.enabled | default(true)
+    - item.type in ['git', 'kustomize']
+  register: git_app_create
+  changed_when: "'application created' in git_app_create.stdout or 'application updated' in git_app_create.stdout"
+  failed_when: git_app_create.rc != 0 and 'already exists' not in git_app_create.stderr
+
+- name: Sync applications
+  delegate_to: argocd-vm
+  shell: |
+    argocd app sync {{ item.name }} --insecure
+  loop: "{{ applications }}"
+  when: item.enabled | default(true)
+  register: app_sync
+  changed_when: true
+  failed_when: false
+
+- name: Clean up temporary values files
+  delegate_to: argocd-vm
+  file:
+    path: "/tmp/values-{{ item.name }}.yaml"
+    state: absent
+  loop: "{{ applications }}"
+  when:
+    - item.enabled | default(true)
+    - item.type == 'helm'
+    - item.values is defined
+
+- name: List all applications
+  delegate_to: argocd-vm
+  shell: argocd app list --insecure
+  register: app_list
+  changed_when: false
+
+- name: Display application bootstrap results
+  debug:
+    msg:
+      - "Applications have been bootstrapped in ArgoCD!"
+      - "{{ app_list.stdout_lines }}"

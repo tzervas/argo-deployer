@@ -1,0 +1,134 @@
+---
+# Deploy ArgoCD VM
+
+- name: Check if VM already exists
+  command: virsh list --all --name
+  register: existing_vms
+  changed_when: false
+
+- name: Remove existing VM if present
+  block:
+    - name: Destroy running VM
+      command: virsh destroy {{ vm_name }}
+      ignore_errors: yes
+      when: vm_name in existing_vms.stdout_lines
+
+    - name: Undefine existing VM
+      command: virsh undefine {{ vm_name }} --remove-all-storage
+      ignore_errors: yes
+      when: vm_name in existing_vms.stdout_lines
+  when: vm_name in existing_vms.stdout_lines
+
+- name: Create VM disk from base image
+  command: >
+    qemu-img create -f qcow2 
+    -F qcow2
+    -b /var/cache/argocd-deployer/ubuntu-22.04-server-cloudimg-amd64.img
+    {{ vm_storage_path }}/{{ vm_image_name }}
+    {{ vm_disk_size }}G
+  args:
+    creates: "{{ vm_storage_path }}/{{ vm_image_name }}"
+
+- name: Resize VM disk
+  command: >
+    qemu-img resize 
+    {{ vm_storage_path }}/{{ vm_image_name }}
+    {{ vm_disk_size }}G
+  changed_when: true
+
+- name: Create cloud-init meta-data
+  copy:
+    content: |
+      instance-id: {{ vm_name }}
+      local-hostname: {{ vm_name }}
+    dest: /tmp/meta-data
+    mode: '0644'
+
+- name: Generate bcrypt hash for ArgoCD admin password
+  shell: |
+    python3 -c "import bcrypt; print(bcrypt.hashpw('{{ argocd_admin_password }}'.encode(), bcrypt.gensalt()).decode())"
+  register: bcrypt_password
+  delegate_to: localhost
+  become: false
+  changed_when: false
+
+- name: Create cloud-init user-data
+  template:
+    src: ../templates/cloud-init-user-data.j2
+    dest: /tmp/user-data
+    mode: '0644'
+
+- name: Create cloud-init network config
+  copy:
+    content: |
+      version: 2
+      ethernets:
+        enp1s0:
+          dhcp4: false
+          addresses:
+            - {{ argocd_ip }}/24
+          gateway4: 192.168.1.1
+          nameservers:
+            addresses:
+              - 8.8.8.8
+              - 8.8.4.4
+    dest: /tmp/network-config
+    mode: '0644'
+
+- name: Create cloud-init ISO
+  command: >
+    genisoimage
+    -output {{ vm_storage_path }}/{{ vm_name }}-cloud-init.iso
+    -volid cidata
+    -joliet
+    -rock
+    /tmp/user-data
+    /tmp/meta-data
+    /tmp/network-config
+  args:
+    creates: "{{ vm_storage_path }}/{{ vm_name }}-cloud-init.iso"
+
+- name: Define and start ArgoCD VM
+  command: >
+    virt-install
+    --name {{ vm_name }}
+    --memory {{ vm_memory }}
+    --vcpus {{ vm_cpus }}
+    --disk {{ vm_storage_path }}/{{ vm_image_name }},device=disk,bus=virtio
+    --disk {{ vm_storage_path }}/{{ vm_name }}-cloud-init.iso,device=cdrom
+    --os-variant ubuntu22.04
+    --virt-type kvm
+    --graphics none
+    --network bridge={{ vm_network_bridge }},model=virtio
+    --import
+    --noautoconsole
+  changed_when: true
+
+- name: Wait for VM to be running
+  command: virsh domstate {{ vm_name }}
+  register: vm_state
+  until: vm_state.stdout == "running"
+  retries: 30
+  delay: 10
+  changed_when: false
+
+- name: Wait for ArgoCD VM to be accessible via SSH
+  wait_for:
+    host: "{{ argocd_ip }}"
+    port: 22
+    delay: 30
+    timeout: 600
+    state: started
+
+- name: Wait additional time for cloud-init to complete
+  pause:
+    seconds: 60
+
+- name: Display VM deployment complete message
+  debug:
+    msg: 
+      - "ArgoCD VM deployed successfully!"
+      - "VM Name: {{ vm_name }}"
+      - "IP Address: {{ argocd_ip }}"
+      - "Memory: {{ vm_memory }}MB"
+      - "CPUs: {{ vm_cpus }}"

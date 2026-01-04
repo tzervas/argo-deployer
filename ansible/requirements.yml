@@ -1,0 +1,8 @@
+[collections]
+# Install required Ansible collections
+
+# community.general provides various useful modules
+# community.general
+
+# community.libvirt provides libvirt modules (if needed)
+# community.libvirt

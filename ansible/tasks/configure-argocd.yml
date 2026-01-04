@@ -1,0 +1,80 @@
+---
+# Configure ArgoCD on the deployed VM
+
+- name: Add ArgoCD VM to dynamic inventory
+  add_host:
+    name: argocd-vm
+    ansible_host: "{{ argocd_ip }}"
+    ansible_user: ubuntu
+    ansible_ssh_common_args: '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null'
+    ansible_python_interpreter: /usr/bin/python3
+
+- name: Wait for ArgoCD services to be ready
+  delegate_to: argocd-vm
+  wait_for:
+    port: "{{ argocd_webui_port }}"
+    host: "{{ argocd_ip }}"
+    delay: 10
+    timeout: 300
+  register: argocd_ready
+
+- name: Get ArgoCD initial admin password
+  delegate_to: argocd-vm
+  shell: |
+    kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d
+  register: initial_password
+  changed_when: false
+  ignore_errors: yes
+
+- name: Update ArgoCD admin password
+  delegate_to: argocd-vm
+  shell: |
+    argocd login {{ argocd_ip }}:{{ argocd_webui_port }} \
+      --username admin \
+      --password '{{ initial_password.stdout }}' \
+      --insecure
+    argocd account update-password \
+      --current-password '{{ initial_password.stdout }}' \
+      --new-password '{{ argocd_admin_password }}' \
+      --insecure
+  when: initial_password is succeeded
+  register: password_update
+  changed_when: true
+
+- name: Configure ArgoCD server settings
+  delegate_to: argocd-vm
+  shell: |
+    kubectl -n argocd patch configmap argocd-cm --type merge -p '{{ item | to_json }}'
+  loop:
+    - data:
+        url: "{{ server.base_url }}"
+        application.instanceLabelKey: argocd.argoproj.io/instance
+    - data:
+        accounts.admin: apiKey,login
+  changed_when: true
+
+- name: Configure ArgoCD RBAC
+  delegate_to: argocd-vm
+  shell: |
+    kubectl -n argocd patch configmap argocd-rbac-cm --type merge -p '{{ item | to_json }}'
+  loop:
+    - data:
+        policy.default: "{{ rbac.policy_default }}"
+        policy.csv: "{{ rbac.policies }}"
+  changed_when: true
+
+- name: Restart ArgoCD server to apply configuration
+  delegate_to: argocd-vm
+  shell: |
+    kubectl -n argocd rollout restart deployment argocd-server
+    kubectl -n argocd rollout status deployment argocd-server
+  changed_when: true
+
+- name: Display ArgoCD access information
+  debug:
+    msg:
+      - "ArgoCD is now configured and accessible!"
+      - "WebUI URL: http://{{ argocd_ip }}:{{ argocd_webui_port }}"
+      - "Username: admin"
+      - "Password: {{ argocd_admin_password }}"
+      - "Please change the default password after first login!"
