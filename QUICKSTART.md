@@ -63,18 +63,18 @@ This will:
 
 ## Step 4: Access ArgoCD
 
-Once deployment completes:
+Once deployment completes, the VM's IP address is automatically detected and saved.
 
-1. **Find your VM's IP address:**
+1. **Get your VM's IP address:**
    ```bash
-   # The VM uses DHCP - check the deployment output for the IP, or run:
-   ssh homelab "sudo virsh domifaddr argocd-server"
+   # Use the helper script (recommended)
+   ./scripts/get-vm-ip.sh
    
-   # Or scan your network for the VM (example if DHCP range is 192.168.1.100-200):
-   nmap -sn 192.168.1.0/24 | grep -B 2 "52:54:00"
+   # Or read the saved IP file
+   cat .vm_ip
    ```
 
-2. Open your browser to: **http://<VM_IP>:30080** (replace <VM_IP> with the DHCP address from step 1)
+2. Open your browser to: **http://<VM_IP>:30080**
    
    Example: http://192.168.1.100:30080
 

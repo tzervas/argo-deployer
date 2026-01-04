@@ -116,11 +116,36 @@
   delay: 10
   changed_when: false
 
+- name: Wait for VM to get IP address from DHCP
+  shell: |
+    virsh domifaddr {{ vm_name }} --source agent 2>/dev/null || virsh domifaddr {{ vm_name }} --source lease 2>/dev/null || virsh domifaddr {{ vm_name }} 2>/dev/null
+  register: vm_ip_check
+  until: vm_ip_check.stdout | regex_search('([0-9]{1,3}\.){3}[0-9]{1,3}')
+  retries: 60
+  delay: 5
+  changed_when: false
+
+- name: Extract VM IP address
+  set_fact:
+    detected_vm_ip: "{{ vm_ip_check.stdout | regex_search('([0-9]{1,3}\.){3}[0-9]{1,3}') }}"
+
+- name: Display detected IP address
+  debug:
+    msg: "VM IP Address detected: {{ detected_vm_ip }}"
+
+- name: Save VM IP to local file
+  delegate_to: localhost
+  copy:
+    content: "{{ detected_vm_ip }}"
+    dest: "{{ playbook_dir }}/../.vm_ip"
+    mode: '0644'
+  become: false
+
 - name: Wait for ArgoCD VM to be accessible via SSH
   wait_for:
-    host: "{{ argocd_ip }}"
+    host: "{{ detected_vm_ip }}"
     port: 22
-    delay: 30
+    delay: 10
     timeout: 600
     state: started
 
@@ -133,6 +158,12 @@
     msg: 
       - "ArgoCD VM deployed successfully!"
       - "VM Name: {{ vm_name }}"
-      - "IP Address: {{ argocd_ip }}"
+      - "IP Address: {{ detected_vm_ip }}"
       - "Memory: {{ vm_memory }}MB"
       - "CPUs: {{ vm_cpus }}"
+      - ""
+      - "Access ArgoCD WebUI at: http://{{ detected_vm_ip }}:30080"
+      - "Username: admin"
+      - "Password: {{ argocd_admin_password }}"
+      - ""
+      - "VM IP saved to: {{ playbook_dir }}/../.vm_ip"

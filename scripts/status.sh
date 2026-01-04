@@ -40,8 +40,19 @@ print_info() {
 # Get configuration values
 TARGET_HOST=$(grep -A5 "homelab:" "${INVENTORY_FILE}" | grep "ansible_host:" | awk '{print $2}')
 VM_NAME=$(grep -A10 "homelab:" "${INVENTORY_FILE}" | grep "vm_name:" | awk '{print $2}')
-ARGOCD_IP=$(grep -A10 "homelab:" "${INVENTORY_FILE}" | grep "argocd_ip:" | awk '{print $2}')
-ARGOCD_PORT=$(grep -A10 "homelab:" "${INVENTORY_FILE}" | grep "argocd_webui_port:" | awk '{print $2}')
+
+# Get dynamic VM IP
+IP_FILE="${PROJECT_ROOT}/.vm_ip"
+if [ -f "$IP_FILE" ]; then
+    ARGOCD_IP=$(cat "$IP_FILE")
+else
+    print_info "No saved IP found, querying server..."
+    ARGOCD_IP=$(ssh "${TARGET_HOST}" "sudo virsh domifaddr ${VM_NAME} 2>/dev/null" | grep -oE '([0-9]{1,3}\.){3}[0-9]{1,3}' | head -1)
+    if [ -n "$ARGOCD_IP" ]; then
+        echo "$ARGOCD_IP" > "$IP_FILE"
+    fi
+fi
+ARGOCD_PORT=30080
 
 # Main execution
 main() {

@@ -47,6 +47,9 @@ tmp/
 temp/
 *.tmp
 
+# Generated runtime files
+.vm_ip
+
 # Cache
 cache/
 .cache/

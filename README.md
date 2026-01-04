@@ -55,21 +55,29 @@ This will:
 
 ### 4. Access ArgoCD
 
-Once deployed, the VM will obtain an IP via DHCP on your network. To find the VM's IP:
+The deployment automatically detects and saves the VM's DHCP-assigned IP address. After deployment completes, the IP will be displayed in the output and saved to `.vm_ip` file.
+
+**To get the VM IP:**
 
 ```bash
-# From the homelab server
-ssh homelab "sudo virsh domifaddr argocd-server"
+# Quick lookup (uses saved IP and verifies connectivity)
+./scripts/get-vm-ip.sh
 
-# Or check the deployment log which will show the IP
+# Or check the saved file
+cat .vm_ip
 ```
 
-Access the ArgoCD WebUI at (replace IP with your VM's DHCP address):
+Access the ArgoCD WebUI at:
 ```
 http://<VM_IP>:30080
 ```
 
-**Note**: The VM uses DHCP, so the IP may vary. Consider setting a DHCP reservation for the MAC address shown in virsh output.
+**Why DHCP?** Dynamic IP detection is more resilient than static IP configuration, which can fail due to:
+- Different network interface naming (enp1s0 vs ens3 vs eth0)
+- Network configuration variations across systems
+- Bridge setup differences
+
+The deployment automatically queries the VM's actual IP and saves it for easy access.
 
 **Default Credentials:**
 - Username: `admin`
